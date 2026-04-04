@@ -2,7 +2,7 @@
 
 let web3;
 let userAccount;
-const contractAddress = "0x4bceaf5c362139a5230b9d65cdb752b1e8da0adf";
+const contractAddress = "0x6287305E85d3D6ae8a45fF3cC447bC25A69dc44A";
 
 // Simple ABI for your contract
 const abi = [
