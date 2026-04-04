@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RentChain</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/web3/1.10.0/web3.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
+  <style>
+    body { font-family: system-ui, sans-serif; }
+    .card { transition: all 0.3s ease; }
+    .card:hover { transform: translateY(-4px); }
+  </style>
+</head>
+<body class="bg-gray-950 text-gray-100 min-h-screen">
+  <div class="max-w-5xl mx-auto p-8">
+    <div class="flex justify-between items-center mb-10">
+      <div class="flex items-center gap-4">
+        <i class="fa-solid fa-house text-5xl text-emerald-500"></i>
+        <h1 class="text-4xl font-bold">RentChain</h1>
+      </div>
+      <button onclick="connectWallet()" id="connectBtn"
+        class="px-8 py-4 bg-emerald-600 hover:bg-emerald-500 rounded-2xl font-semibold flex items-center gap-3">
+        <i class="fa-solid fa-wallet"></i>
+        <span id="connectText">Connect MetaMask</span>
+      </button>
+    </div>
+
+    <div class="flex border-b border-gray-700 mb-10">
+      <button onclick="switchTab(0)" class="px-10 py-5 text-xl font-semibold border-b-4 border-emerald-500">👑 Landlord</button>
+      <button onclick="switchTab(1)" class="px-10 py-5 text-xl font-semibold">👤 Tenant</button>
+    </div>
+
+    <!-- Landlord Panel -->
+    <div id="landlordPanel">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div class="card bg-gray-900 rounded-3xl p-8">
+          <h2 class="text-2xl font-semibold mb-6">Manage Agreement</h2>
+          <p class="text-gray-400 mb-6">Contract: <span class="font-mono text-emerald-400 break-all text-sm">0x4bceaf5c362139a5230b9d65cdb752b1e8da0adf</span></p>
+          
+          <button onclick="terminateAgreement()" class="w-full py-5 bg-red-600 hover:bg-red-500 rounded-2xl font-bold mb-4">Terminate Agreement</button>
+          <button onclick="returnSecurityDeposit()" class="w-full py-5 bg-amber-600 hover:bg-amber-500 rounded-2xl font-bold">Return Security Deposit</button>
+        </div>
+
+        <div class="card bg-gray-900 rounded-3xl p-8">
+          <h2 class="text-2xl font-semibold mb-6">Status</h2>
+          <p>Status: <span id="statusText" class="font-bold text-emerald-400">Active</span></p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tenant Panel -->
+    <div id="tenantPanel" class="hidden">
+      <div class="card bg-gray-900 rounded-3xl p-10 max-w-lg mx-auto">
+        <h2 class="text-3xl font-semibold text-center mb-8">Tenant Dashboard</h2>
+        
+        <div class="bg-gray-800 rounded-3xl p-8 mb-8">
+          <div class="flex justify-between text-lg mb-4">
+            <span>Due Amount</span>
+            <span id="dueAmountDisplay" class="font-bold text-emerald-400">Loading...</span>
+          </div>
+          <div class="flex justify-between text-lg">
+            <span>Late Fee</span>
+            <span id="lateStatusDisplay" class="text-amber-400">Waiting...</span>
+          </div>
+        </div>
+
+        <button onclick="payRent()" class="w-full py-6 bg-emerald-600 hover:bg-emerald-500 rounded-3xl font-bold text-2xl">
+          Pay Rent Now
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let web3;
+    let userAccount;
+    const contractAddress = "0x4bceaf5c362139a5230b9d65cdb752b1e8da0adf";
+
+    const abi = [
+      {"constant":false,"inputs":[],"name":"payRent","outputs":[],"payable":true,"stateMutability":"payable","type":"function"},
+      {"constant":false,"inputs":[],"name":"terminateAgreement","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},
+      {"constant":false,"inputs":[],"name":"returnSecurityDeposit","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},
+      {"constant":true,"inputs":[],"name":"getDueAmount","outputs":[{"name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},
+      {"constant":true,"inputs":[],"name":"isRentLate","outputs":[{"name":"","type":"bool"}],"payable":false,"stateMutability":"view","type":"function"},
+      {"constant":true,"inputs":[],"name":"isActive","outputs":[{"name":"","type":"bool"}],"payable":false,"stateMutability":"view","type":"function"}
+    ];
+
+    let contract;
+
+    async function connectWallet() {
+      const btn = document.getElementById("connectText");
+      btn.innerText = "Connecting...";
+
+      try {
+        if (!window.ethereum) throw new Error("MetaMask not found");
+
+        await window.ethereum.request({ method: "eth_requestAccounts" });
+        web3 = new Web3(window.ethereum);
+        const accounts = await web3.eth.getAccounts();
+        userAccount = accounts[0];
+
+        contract = new web3.eth.Contract(abi, contractAddress);
+
+        btn.innerText = "Connected ✓";
+        alert("✅ Connected! Address: " + userAccount);
+
+        updateStatus();
+
+      } catch (err) {
+        alert("Connection failed: " + err.message);
+        btn.innerText = "Connect MetaMask";
+      }
+    }
+
+    async function updateStatus() {
+      if (!contract) return;
+      try {
+        const due = await contract.methods.getDueAmount().call();
+        const late = await contract.methods.isRentLate().call();
+        const active = await contract.methods.isActive().call();
+
+        document.getElementById("dueAmountDisplay").innerText = web3.utils.fromWei(due, 'ether') + " ETH";
+        document.getElementById("lateStatusDisplay").innerText = late ? "10% Late Fee" : "No Late Fee";
+        document.getElementById("statusText").innerText = active ? "Active" : "Terminated";
+      } catch(e) {}
+    }
+
+    async function payRent() {
+      if (!contract || !userAccount) return alert("Connect MetaMask first!");
+      try {
+        const due = await contract.methods.getDueAmount().call();
+        const tx = await contract.methods.payRent().send({
+            from: userAccount,
+             value: due
+        });
+        alert("✅ Rent Paid Successfully!");
+        updateStatus();
+      } catch (err) {
+        alert("Payment failed: " + (err.message || err));
+      }
+    }
+
+    async function terminateAgreement() {
+      if (!contract || !userAccount) return alert("Connect MetaMask first!");
+      if (!confirm("Terminate the agreement?")) return;
+      try {
+        await contract.methods.terminateAgreement().send({ from: userAccount });
+        alert("✅ Agreement Terminated!");
+      } catch (err) {
+        alert("Error: " + err.message);
+      }
+    }
+
+    async function returnSecurityDeposit() {
+      if (!contract || !userAccount) return alert("Connect MetaMask first!");
+      try {
+        await contract.methods.returnSecurityDeposit().send({ from: userAccount });
+        alert("✅ Security Deposit Returned!");
+      } catch (err) {
+        alert("Error: " + err.message);
+      }
+    }
+
+    function switchTab(n) {
+      document.getElementById("landlordPanel").classList.toggle("hidden", n !== 0);
+      document.getElementById("tenantPanel").classList.toggle("hidden", n !== 1);
+    }
+  </script>
+</body>
+</html>
